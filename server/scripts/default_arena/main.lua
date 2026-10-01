@@ -181,17 +181,6 @@ function on_action(entity_id, ability_id, dir_x, dir_y)
                     spawn_tick = current_tick  -- Guardar tick de spawn
                 }
             end
-
-            if fireball_id then
-                Loci.Commands.set_velocity(fireball_id, {x = fb_dir_x * FIREBALL_SPEED, y = fb_dir_y * FIREBALL_SPEED})
-                fireballs[#fireballs + 1] = {
-                    id = fireball_id,
-                    owner = entity_id,  -- Armazenar como número para comparação correta
-                    expires_at = current_tick + FIREBALL_LIFETIME,
-                    spawn_pos = {x = spawn_x, y = spawn_y},  -- Guardar posição inicial
-                    direction = {x = fb_dir_x, y = fb_dir_y}  -- Guardar direção
-                }
-            end
         end
     elseif ability_id == 2 then
         -- Dash
