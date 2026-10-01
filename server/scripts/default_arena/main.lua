@@ -15,7 +15,7 @@ local FIREBALL_SPEED = 4.0  -- Aumentado para se afastar mais rápido
 local FIREBALL_LIFETIME = 120  -- ticks (~4 segundos)
 local FIREBALL_DAMAGE = 10
 local FIREBALL_RADIUS = 2
-local FIREBALL_SPAWN_OFFSET = 30.0  -- Aumentado para spawn bem longe do jogador
+local FIREBALL_SPAWN_OFFSET = 50.0  -- Aumentado para evitar colisão com dono ao andar
 local HIT_RADIUS = 5.0
 
 -- Configurações de movimento
@@ -165,9 +165,21 @@ function on_action(entity_id, ability_id, dir_x, dir_y)
                 }
             })
 
-            -- Tornar fireball intangível ao dono (API set_intangible)
-            if Loci.set_intangible then
-                Loci.set_intangible(fireball_id, true)
+            if fireball_id then
+                -- Tornar fireball intangível ao dono (API set_intangible)
+                if Loci.set_intangible then
+                    Loci.set_intangible(fireball_id, true)
+                end
+
+                Loci.Commands.set_velocity(fireball_id, {x = fb_dir_x * FIREBALL_SPEED, y = fb_dir_y * FIREBALL_SPEED})
+                fireballs[#fireballs + 1] = {
+                    id = fireball_id,
+                    owner = entity_id,  -- Armazenar como número para comparação correta
+                    expires_at = current_tick + FIREBALL_LIFETIME,
+                    spawn_pos = {x = spawn_x, y = spawn_y},  -- Guardar posição inicial
+                    direction = {x = fb_dir_x, y = fb_dir_y},  -- Guardar direção
+                    spawn_tick = current_tick  -- Guardar tick de spawn
+                }
             end
 
             if fireball_id then
@@ -249,8 +261,13 @@ function on_collision(entity_a_id, entity_b_id)
     if kind_a == "fireball" then
         local owner_a = Loci.get_entity_property(entity_a_id, "owner")
 
-        -- Se colidiu com jogador que não é o dono, aplicar dano e destruir
-        if kind_b == "player" and entity_b_id ~= tonumber(owner_a) then
+        -- Se colidiu com jogador
+        if kind_b == "player" then
+            -- Se for o dono, ignorar completamente
+            if entity_b_id == tonumber(owner_a) then
+                return
+            end
+            -- Se for inimigo, aplicar dano e destruir
             apply_damage(entity_b_id, FIREBALL_DAMAGE)
             Loci.Commands.destroy_entity(entity_a_id)
         -- Se colidiu com outra fireball de dono diferente, destruir ambas
@@ -270,8 +287,13 @@ function on_collision(entity_a_id, entity_b_id)
     if kind_b == "fireball" then
         local owner_b = Loci.get_entity_property(entity_b_id, "owner")
 
-        -- Se colidiu com jogador que não é o dono, aplicar dano e destruir
-        if kind_a == "player" and entity_a_id ~= tonumber(owner_b) then
+        -- Se colidiu com jogador
+        if kind_a == "player" then
+            -- Se for o dono, ignorar completamente
+            if entity_a_id == tonumber(owner_b) then
+                return
+            end
+            -- Se for inimigo, aplicar dano e destruir
             apply_damage(entity_a_id, FIREBALL_DAMAGE)
             Loci.Commands.destroy_entity(entity_b_id)
         -- Se colidiu com qualquer outra coisa (parede/obstáculo), destruir
@@ -340,6 +362,9 @@ function on_tick(tick)
                 end
                 keep = false
             else
+                -- Verificar se ainda está no período de grace com o dono (primeiros 20 ticks)
+                local grace_period = fb.spawn_tick and (tick - fb.spawn_tick) < 20
+
                 -- Tentar obter posição real da entidade também para colisão
                 local real_pos = Loci.get_entity_position(fb.id)
                 local check_x, check_y = px, py
@@ -356,15 +381,25 @@ function on_tick(tick)
                     if keep and id ~= fb.id and not destroyed[id] then
                         local entity_kind = Loci.get_entity_property(id, "kind")
                         if is_player(id) then
-                            -- Colidiu com inimigo - aplicar dano
-                            apply_damage(id, FIREBALL_DAMAGE)
-                        elseif entity_kind == "fireball" then
-                            -- Colidiu com outra fireball - destruir ambas
-                            if fb.id < id and not destroyed[fb.id] then
-                                Loci.Commands.destroy_entity(fb.id)
-                                destroyed[fb.id] = true
-                                keep = false
+                            -- Colidiu com jogador
+                            if id == fb.owner and grace_period then
+                                -- Colidiu com dono durante grace period - ignorar
+                            else
+                                -- Colidiu com inimigo ou grace period acabou - aplicar dano
+                                apply_damage(id, FIREBALL_DAMAGE)
                             end
+                        elseif entity_kind == "fireball" then
+                            -- Colidiu com outra fireball - verificar dono
+                            local other_owner = Loci.get_entity_property(id, "owner")
+                            if fb.owner ~= tonumber(other_owner) then
+                                -- Donos diferentes - destruir ambas
+                                if fb.id < id and not destroyed[fb.id] then
+                                    Loci.Commands.destroy_entity(fb.id)
+                                    destroyed[fb.id] = true
+                                    keep = false
+                                end
+                            end
+                            -- Se for do mesmo dono, não fazer nada (passam uma pela outra)
                         end
                     end
                 end

@@ -295,14 +295,36 @@ function draw_entity(ent, is_me)
         love.graphics.circle("line", px, py, 10)
     end
     
-    -- Visual effect for Shield (aura contínua)
+    -- Visual effect for Shield (aura animada)
     if ent.properties and ent.properties.shield_active == "true" then
-        love.graphics.setColor(0.2, 0.8, 0.9, 0.3)
-        love.graphics.circle("fill", px, py, 12)
-        love.graphics.setColor(0.2, 0.8, 0.9, 0.6)
+        local time = love.timer.getTime()
+        local pulse = math.sin(time * 3) * 0.3 + 0.7  -- Pulsação entre 0.4 e 1.0
+
+        -- Círculo base do escudo
+        love.graphics.setColor(0.2, 0.8, 0.9, 0.2 * pulse)
+        love.graphics.circle("fill", px, py, 16)
+
+        -- Anéis externos com pulsação
+        love.graphics.setColor(0.2, 0.8, 0.9, 0.4 * pulse)
         love.graphics.setLineWidth(2)
-        love.graphics.circle("line", px, py, 12)
-        love.graphics.circle("line", px, py, 14)
+        love.graphics.circle("line", px, py, 16)
+
+        love.graphics.setColor(0.2, 0.8, 0.9, 0.3 * pulse)
+        love.graphics.setLineWidth(1)
+        love.graphics.circle("line", px, py, 18 + math.sin(time * 5) * 2)
+
+        love.graphics.setColor(0.2, 0.8, 0.9, 0.2 * pulse)
+        love.graphics.circle("line", px, py, 20 + math.cos(time * 4) * 2)
+
+        -- Partículas de escudo (círculos menores)
+        love.graphics.setColor(0.3, 0.9, 1.0, 0.6 * pulse)
+        for i = 0, 7 do
+            local angle = (i / 8) * math.pi * 2 + time * 2
+            local dist = 14 + math.sin(time * 3 + i) * 2
+            local part_x = px + math.cos(angle) * dist
+            local part_y = py + math.sin(angle) * dist
+            love.graphics.circle("fill", part_x, part_y, 2)
+        end
     end
 
     local hp = tonumber(ent.hp or (ent.properties and ent.properties["hp"]) or 100) or 100
